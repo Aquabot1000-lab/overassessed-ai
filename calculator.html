@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Calculate your potential property tax savings with OverAssessed AI. Enter your property details for an instant estimate.">
+    <title>Property Tax Savings Calculator | OverAssessed</title>
+    <link rel="canonical" href="https://overassessed.ai/calculator">
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg viewBox='0 0 80 80' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3ClinearGradient id='logoGrad' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' style='stop-color:%236c5ce7'/%3E%3Cstop offset='100%25' style='stop-color:%230984e3'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='0' y='0' width='80' height='80' rx='18' fill='url(%23logoGrad)'/%3E%3Cpath d='M40 25v30M31 47l9 9 9-9' stroke='white' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        .calc-hero {
+            background: linear-gradient(135deg, #6c5ce7 0%, #0984e3 100%);
+            color: white;
+            padding: 80px 0 60px;
+            text-align: center;
+        }
+        .calc-hero h1 { font-size: 2.5rem; font-weight: 800; margin-bottom: 16px; }
+        .calc-hero p { font-size: 1.1rem; opacity: 0.9; max-width: 600px; margin: 0 auto; }
+        
+        .calc-section { padding: 60px 0; background: var(--bg-tint); }
+        .calc-container { max-width: 900px; margin: 0 auto; padding: 0 20px; }
+        .calc-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: start; }
+        
+        @media (max-width: 768px) {
+            .calc-layout { grid-template-columns: 1fr; gap: 30px; }
+        }
+        
+        .calc-form {
+            background: white;
+            padding: 40px;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .calc-form h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: 20px; }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { 
+            display: block; 
+            font-weight: 600; 
+            margin-bottom: 8px; 
+            color: var(--dark); 
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: var(--radius);
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: var(--purple);
+            box-shadow: 0 0 0 3px rgba(108,92,231,0.1);
+        }
+        
+        .calc-btn {
+            width: 100%;
+            background: var(--gradient);
+            color: white;
+            border: none;
+            padding: 16px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .calc-btn:hover { transform: translateY(-2px); }
+        .calc-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        
+        .results-panel {
+            background: white;
+            padding: 40px;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            text-align: center;
+        }
+        
+        .results-panel.hidden { display: none; }
+        
+        .savings-display {
+            font-size: 3rem;
+            font-weight: 900;
+            color: var(--green);
+            margin: 20px 0;
+        }
+        
+        .savings-breakdown {
+            background: var(--bg-tint);
+            padding: 20px;
+            border-radius: var(--radius);
+            margin: 20px 0;
+            text-align: left;
+        }
+        
+        .breakdown-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.95rem;
+        }
+        .breakdown-row.total {
+            font-weight: 700;
+            font-size: 1.1rem;
+            border-top: 2px solid #ddd;
+            padding-top: 8px;
+            margin-top: 16px;
+        }
+        
+        .lead-capture {
+            background: var(--gradient);
+            color: white;
+            padding: 30px;
+            border-radius: var(--radius-lg);
+            margin-top: 30px;
+        }
+        
+        .lead-capture h3 { font-size: 1.3rem; margin-bottom: 16px; }
+        .lead-capture p { opacity: 0.9; margin-bottom: 20px; }
+        
+        .lead-form { display: grid; gap: 16px; }
+        .lead-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        @media (max-width: 480px) { .lead-row { grid-template-columns: 1fr; } }
+        
+        .lead-form input {
+            padding: 12px 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: var(--radius);
+            background: rgba(255,255,255,0.1);
+            color: white;
+            font-size: 1rem;
+        }
+        .lead-form input::placeholder { color: rgba(255,255,255,0.7); }
+        .lead-form input:focus {
+            outline: none;
+            border-color: white;
+            background: rgba(255,255,255,0.15);
+        }
+        
+        .lead-btn {
+            background: white;
+            color: var(--purple);
+            border: none;
+            padding: 14px 24px;
+            font-size: 1rem;
+            font-weight: 700;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .lead-btn:hover { transform: translateY(-2px); }
+        
+        .disclaimer {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 16px;
+            border-radius: var(--radius);
+            margin-top: 20px;
+            font-size: 0.9rem;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <a href="/" class="logo">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 80 80" fill="none">
+                        <defs>
+                            <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#6c5ce7"/>
+                                <stop offset="100%" style="stop-color:#0984e3"/>
+                            </linearGradient>
+                        </defs>
+                        <rect x="0" y="0" width="80" height="80" rx="18" fill="url(#logoGrad)"/>
+                        <path d="M40 25v30M31 47l9 9 9-9" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                    </svg>
+                </div>
+                <span>OverAssessed</span>
+            </a>
+            <nav class="nav">
+                <a href="/">Home</a>
+                <a href="/pre-register">Pre-Register</a>
+                <a href="#" class="btn-primary">Get Started</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Hero -->
+    <section class="calc-hero">
+        <div class="container">
+            <h1>Property Tax Savings Calculator</h1>
+            <p>Enter your property details below to see how much you could save on your 2026 Texas property taxes.</p>
+        </div>
+    </section>
+
+    <!-- Calculator -->
+    <section class="calc-section">
+        <div class="calc-container">
+            <div class="calc-layout">
+                <!-- Calculator Form -->
+                <div class="calc-form">
+                    <h2>Property Information</h2>
+                    <form id="calc-form">
+                        <div class="form-group">
+                            <label for="property-address">Property Address</label>
+                            <input type="text" id="property-address" name="property_address" placeholder="123 Main St, San Antonio, TX" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="assessed-value">Current Assessed Value</label>
+                            <input type="number" id="assessed-value" name="assessed_value" placeholder="400000" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="county">County</label>
+                            <select id="county" name="county" required>
+                                <option value="">Select your county</option>
+                                <option value="Bexar">Bexar</option>
+                                <option value="Harris">Harris</option>
+                                <option value="Dallas">Dallas</option>
+                                <option value="Tarrant">Tarrant</option>
+                                <option value="Travis">Travis</option>
+                                <option value="Collin">Collin</option>
+                                <option value="Denton">Denton</option>
+                                <option value="Fort Bend">Fort Bend</option>
+                                <option value="Williamson">Williamson</option>
+                                <option value="Montgomery">Montgomery</option>
+                                <option value="Hays">Hays</option>
+                                <option value="El Paso">El Paso</option>
+                                <option value="Comal">Comal</option>
+                                <option value="Guadalupe">Guadalupe</option>
+                                <option value="Hidalgo">Hidalgo</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="property-type">Property Type</label>
+                            <select id="property-type" name="property_type" required>
+                                <option value="residential">Residential</option>
+                                <option value="commercial">Commercial</option>
+                            </select>
+                        </div>
+                        
+                        <button type="submit" class="calc-btn">Calculate My Savings</button>
+                    </form>
+                </div>
+
+                <!-- Results Panel -->
+                <div class="results-panel hidden" id="results-panel">
+                    <h2>Your Potential Savings</h2>
+                    <div class="savings-display" id="savings-amount">$0</div>
+                    <p>Estimated first-year tax savings</p>
+                    
+                    <div class="savings-breakdown">
+                        <div class="breakdown-row">
+                            <span>Current assessed value:</span>
+                            <span id="current-value">$0</span>
+                        </div>
+                        <div class="breakdown-row">
+                            <span>Estimated reduced value:</span>
+                            <span id="reduced-value">$0</span>
+                        </div>
+                        <div class="breakdown-row">
+                            <span>Value reduction:</span>
+                            <span id="value-reduction">$0</span>
+                        </div>
+                        <div class="breakdown-row">
+                            <span>Average tax rate:</span>
+                            <span id="tax-rate">0%</span>
+                        </div>
+                        <div class="breakdown-row total">
+                            <span>Annual tax savings:</span>
+                            <span id="total-savings">$0</span>
+                        </div>
+                    </div>
+                    
+                    <div class="lead-capture">
+                        <h3>Get Your Free Analysis</h3>
+                        <p>Ready to make this savings a reality? Get your free property analysis from our Texas experts.</p>
+                        
+                        <form id="lead-form" class="lead-form">
+                            <div class="lead-row">
+                                <input type="text" name="name" placeholder="Full Name" required>
+                                <input type="email" name="email" placeholder="Email Address" required>
+                            </div>
+                            <input type="tel" name="phone" placeholder="Phone Number (Optional)">
+                            <button type="submit" class="lead-btn">Get My Free Analysis</button>
+                        </form>
+                    </div>
+                    
+                    <div class="disclaimer">
+                        <strong>Disclaimer:</strong> This calculator provides estimates based on typical reduction rates. Actual results may vary based on property conditions, market factors, and appraisal district policies. No guarantee of specific outcomes.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        // County tax rate data (approximate averages)
+        const countyTaxRates = {
+            'Bexar': 2.45,
+            'Harris': 2.89,
+            'Dallas': 2.31,
+            'Tarrant': 2.28,
+            'Travis': 2.52,
+            'Collin': 2.31,
+            'Denton': 2.28,
+            'Fort Bend': 2.89,
+            'Williamson': 2.41,
+            'Montgomery': 2.67,
+            'Hays': 2.52,
+            'El Paso': 2.95,
+            'Comal': 2.45,
+            'Guadalupe': 2.38,
+            'Hidalgo': 3.12
+        };
+
+        // Calculator logic
+        document.getElementById('calc-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const assessedValue = parseInt(formData.get('assessed_value'));
+            const county = formData.get('county');
+            const propertyType = formData.get('property_type');
+            
+            // Typical reduction rates
+            const reductionRate = propertyType === 'commercial' ? 0.15 : 0.12; // 15% commercial, 12% residential
+            const taxRate = countyTaxRates[county] / 100;
+            
+            const valueReduction = Math.floor(assessedValue * reductionRate);
+            const reducedValue = assessedValue - valueReduction;
+            const annualSavings = Math.floor(valueReduction * taxRate);
+            
+            // Update results
+            document.getElementById('savings-amount').textContent = '$' + annualSavings.toLocaleString();
+            document.getElementById('current-value').textContent = '$' + assessedValue.toLocaleString();
+            document.getElementById('reduced-value').textContent = '$' + reducedValue.toLocaleString();
+            document.getElementById('value-reduction').textContent = '$' + valueReduction.toLocaleString();
+            document.getElementById('tax-rate').textContent = (taxRate * 100).toFixed(2) + '%';
+            document.getElementById('total-savings').textContent = '$' + annualSavings.toLocaleString();
+            
+            // Show results panel
+            document.getElementById('results-panel').classList.remove('hidden');
+            
+            // Store data for lead capture
+            window.calculatorData = {
+                property_address: formData.get('property_address'),
+                assessed_value: assessedValue,
+                county: county,
+                property_type: propertyType,
+                estimated_savings: annualSavings
+            };
+        });
+
+        // Lead capture form
+        document.getElementById('lead-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const leadData = {
+                name: formData.get('name'),
+                email: formData.get('email'),
+                phone: formData.get('phone') || '',
+                source: 'calculator',
+                ...window.calculatorData
+            };
+            
+            try {
+                const response = await fetch('/api/calculator-lead', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(leadData)
+                });
+                
+                if (response.ok) {
+                    alert('Thank you! We\'ll contact you within 24 hours with your free analysis.');
+                    e.target.reset();
+                } else {
+                    throw new Error('Network error');
+                }
+            } catch (error) {
+                alert('There was an error. Please try again or contact us directly.');
+            }
+        });
+    </script>
+</body>
+</html>

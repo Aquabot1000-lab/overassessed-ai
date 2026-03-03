@@ -1,0 +1,135 @@
+// Texas County Data for SEO Landing Pages
+const countyData = {
+  'comal': {
+    name: 'Comal',
+    fullName: 'Comal County',
+    majorCity: 'New Braunfels',
+    cadName: 'Comal Appraisal District',
+    cadAddress: '900 S. Seguin Ave., New Braunfels, TX 78130',
+    cadPhone: '(830) 620-3400',
+    cadWebsite: 'comalad.org',
+    population: '161,501',
+    medianHomeValue: '$389,000',
+    avgTaxRate: '2.45%',
+    neighborhoods: ['New Braunfels', 'Bulverde', 'Spring Branch', 'Canyon Lake', 'Garden Ridge']
+  },
+  'guadalupe': {
+    name: 'Guadalupe',
+    fullName: 'Guadalupe County',
+    majorCity: 'Seguin',
+    cadName: 'Guadalupe County Appraisal District',
+    cadAddress: '3000 N. Austin St., Seguin, TX 78155',
+    cadPhone: '(830) 303-4312',
+    cadWebsite: 'guadalupecad.org',
+    population: '166,847',
+    medianHomeValue: '$285,000',
+    avgTaxRate: '2.38%',
+    neighborhoods: ['Seguin', 'Schertz', 'Cibolo', 'Marion', 'McQueeney']
+  },
+  'hays': {
+    name: 'Hays',
+    fullName: 'Hays County',
+    majorCity: 'San Marcos',
+    cadName: 'Hays County Appraisal District',
+    cadAddress: '712 S. Stagecoach Trail, San Marcos, TX 78666',
+    cadPhone: '(512) 393-7000',
+    cadWebsite: 'hayscad.com',
+    population: '241,067',
+    medianHomeValue: '$425,000',
+    avgTaxRate: '2.52%',
+    neighborhoods: ['San Marcos', 'Kyle', 'Buda', 'Dripping Springs', 'Wimberley']
+  },
+  'williamson': {
+    name: 'Williamson',
+    fullName: 'Williamson County',
+    majorCity: 'Round Rock',
+    cadName: 'Williamson County Appraisal District',
+    cadAddress: '625 FM 1460, Georgetown, TX 78628',
+    cadPhone: '(512) 930-3787',
+    cadWebsite: 'wcad.org',
+    population: '609,017',
+    medianHomeValue: '$485,000',
+    avgTaxRate: '2.41%',
+    neighborhoods: ['Round Rock', 'Georgetown', 'Cedar Park', 'Leander', 'Pflugerville']
+  },
+  'collin': {
+    name: 'Collin',
+    fullName: 'Collin County',
+    majorCity: 'Plano',
+    cadName: 'Collin County Appraisal District',
+    cadAddress: '250 Eldorado Pkwy., McKinney, TX 75069',
+    cadPhone: '(972) 529-1050',
+    cadWebsite: 'collincad.org',
+    population: '1,064,465',
+    medianHomeValue: '$525,000',
+    avgTaxRate: '2.31%',
+    neighborhoods: ['Plano', 'McKinney', 'Frisco', 'Allen', 'Richardson']
+  },
+  'denton': {
+    name: 'Denton',
+    fullName: 'Denton County',
+    majorCity: 'Denton',
+    cadName: 'Denton County Appraisal District',
+    cadAddress: '1717 N. Elm St., Denton, TX 76201',
+    cadPhone: '(940) 349-3800',
+    cadWebsite: 'dentoncad.com',
+    population: '906,422',
+    medianHomeValue: '$415,000',
+    avgTaxRate: '2.28%',
+    neighborhoods: ['Denton', 'Carrollton', 'Flower Mound', 'Lewisville', 'Frisco']
+  },
+  'fort-bend': {
+    name: 'Fort Bend',
+    fullName: 'Fort Bend County',
+    majorCity: 'Sugar Land',
+    cadName: 'Fort Bend County Appraisal District',
+    cadAddress: '2801 B.F. Terry Blvd., Rosenberg, TX 77471',
+    cadPhone: '(281) 344-8623',
+    cadWebsite: 'fbcad.org',
+    population: '822,779',
+    medianHomeValue: '$425,000',
+    avgTaxRate: '2.89%',
+    neighborhoods: ['Sugar Land', 'Katy', 'Missouri City', 'Stafford', 'Richmond']
+  },
+  'montgomery': {
+    name: 'Montgomery',
+    fullName: 'Montgomery County',
+    majorCity: 'Conroe',
+    cadName: 'Montgomery County Appraisal District',
+    cadAddress: '9950 W. Sam Houston Pkwy. N., Houston, TX 77064',
+    cadPhone: '(936) 539-7800',
+    cadWebsite: 'mctx.org',
+    population: '620,443',
+    medianHomeValue: '$365,000',
+    avgTaxRate: '2.67%',
+    neighborhoods: ['Conroe', 'The Woodlands', 'Spring', 'Tomball', 'Montgomery']
+  },
+  'el-paso': {
+    name: 'El Paso',
+    fullName: 'El Paso County',
+    majorCity: 'El Paso',
+    cadName: 'El Paso County Appraisal District',
+    cadAddress: '5801 Trowbridge Dr., El Paso, TX 79925',
+    cadPhone: '(915) 780-2000',
+    cadWebsite: 'epcad.org',
+    population: '865,657',
+    medianHomeValue: '$185,000',
+    avgTaxRate: '2.95%',
+    neighborhoods: ['El Paso', 'Socorro', 'Horizon City', 'Anthony', 'Canutillo']
+  },
+  'hidalgo': {
+    name: 'Hidalgo',
+    fullName: 'Hidalgo County',
+    majorCity: 'McAllen',
+    cadName: 'Hidalgo County Appraisal District',
+    cadAddress: '300 N. Bicentennial Blvd., McAllen, TX 78501',
+    cadPhone: '(956) 318-2400',
+    cadWebsite: 'hidalgoad.org',
+    population: '870,781',
+    medianHomeValue: '$165,000',
+    avgTaxRate: '3.12%',
+    neighborhoods: ['McAllen', 'Edinburg', 'Mission', 'Pharr', 'Brownsville']
+  }
+};
+
+module.exports = countyData;

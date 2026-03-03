@@ -2,6 +2,157 @@ const express = require('express');
 const router = express.Router();
 const { supabaseAdmin, isSupabaseEnabled } = require('../lib/supabase');
 
+// Stripe auto-invoicing & auto-charging
+const stripe = process.env.STRIPE_SECRET_KEY ? require('stripe')(process.env.STRIPE_SECRET_KEY) : null;
+let chargeSavedCard;
+try { chargeSavedCard = require('./stripe').chargeSavedCard; } catch (e) { chargeSavedCard = null; }
+
+/**
+ * Auto-generate and send a Stripe invoice when an appeal is won.
+ * Called automatically when status → 'won' and savings_amount is present.
+ */
+async function autoInvoiceClient(appeal) {
+    if (!stripe) {
+        console.log('[AutoInvoice] Stripe not configured — skipping');
+        return null;
+    }
+
+    const clientId = appeal.client_id;
+    const savingsAmount = parseFloat(appeal.savings_amount);
+    if (!savingsAmount || savingsAmount <= 0) {
+        console.log('[AutoInvoice] No savings amount — skipping');
+        return null;
+    }
+
+    // Determine fee percentage based on state
+    const state = (appeal.state || 'TX').toUpperCase();
+    const feePercent = appeal.our_fee_percent || (state === 'TX' ? 20 : state === 'GA' ? 25 : 20);
+    const feeAmount = Math.round(savingsAmount * (feePercent / 100) * 100) / 100;
+
+    if (feeAmount < 1) {
+        console.log('[AutoInvoice] Fee too small ($' + feeAmount + ') — skipping');
+        return null;
+    }
+
+    try {
+        // STEP 1: Try auto-charging the card on file first
+        if (chargeSavedCard) {
+            const description = `Property Tax Appeal Fee — ${feePercent}% of $${savingsAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })} verified tax savings`;
+            const chargeResult = await chargeSavedCard(clientId, appeal.id, feeAmount, description);
+            if (chargeResult && chargeResult.success) {
+                console.log(`[AutoInvoice] ✅ Auto-charged card on file: ${chargeResult.email} for $${feeAmount}`);
+                // Update appeal
+                await supabaseAdmin
+                    .from('appeals')
+                    .update({
+                        our_fee_percent: feePercent,
+                        our_fee_amount: feeAmount,
+                        payment_status: 'paid'
+                    })
+                    .eq('id', appeal.id);
+                return { ...chargeResult, feeAmount, method: 'auto_charge' };
+            }
+            console.log(`[AutoInvoice] No card on file or charge failed — falling back to invoice`);
+        }
+
+        // STEP 2: Fall back to sending a Stripe invoice
+        // Get client info
+        const { data: client, error: clientErr } = await supabaseAdmin
+            .from('clients')
+            .select('*')
+            .eq('id', clientId)
+            .single();
+        if (clientErr || !client) throw new Error('Client not found: ' + clientId);
+
+        // Get property info for description
+        let propertyAddress = 'your property';
+        if (appeal.properties?.address) {
+            propertyAddress = appeal.properties.address;
+        } else {
+            const { data: prop } = await supabaseAdmin
+                .from('properties')
+                .select('address')
+                .eq('id', appeal.property_id)
+                .single();
+            if (prop) propertyAddress = prop.address;
+        }
+
+        // Find or create Stripe customer
+        let stripeCustomerId = client.stripe_customer_id;
+        if (!stripeCustomerId) {
+            const customer = await stripe.customers.create({
+                name: client.name,
+                email: client.email,
+                phone: client.phone || undefined,
+                metadata: { supabase_client_id: clientId, source: 'overassessed.ai' }
+            });
+            stripeCustomerId = customer.id;
+            await supabaseAdmin
+                .from('clients')
+                .update({ stripe_customer_id: stripeCustomerId })
+                .eq('id', clientId);
+        }
+
+        // Create invoice
+        const invoice = await stripe.invoices.create({
+            customer: stripeCustomerId,
+            collection_method: 'send_invoice',
+            days_until_due: 30,
+            metadata: {
+                client_id: clientId,
+                appeal_id: appeal.id,
+                case_id: appeal.case_id || '',
+                source: 'overassessed.ai'
+            }
+        });
+
+        // Add line item
+        const description = `Property Tax Appeal Fee — ${feePercent}% of $${savingsAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })} verified tax savings for ${propertyAddress} (Case ${appeal.case_id || appeal.id})`;
+
+        await stripe.invoiceItems.create({
+            customer: stripeCustomerId,
+            invoice: invoice.id,
+            amount: Math.round(feeAmount * 100),
+            currency: 'usd',
+            description
+        });
+
+        // Finalize and send
+        const finalizedInvoice = await stripe.invoices.finalizeInvoice(invoice.id);
+        await stripe.invoices.sendInvoice(invoice.id);
+
+        // Record payment in Supabase
+        await supabaseAdmin.from('payments').insert({
+            client_id: clientId,
+            appeal_id: appeal.id,
+            stripe_payment_id: invoice.id,
+            amount: feeAmount,
+            status: 'invoiced'
+        });
+
+        // Update appeal with fee info and payment status
+        await supabaseAdmin
+            .from('appeals')
+            .update({
+                our_fee_percent: feePercent,
+                our_fee_amount: feeAmount,
+                payment_status: 'invoiced'
+            })
+            .eq('id', appeal.id);
+
+        console.log(`[AutoInvoice] ✅ Invoice sent to ${client.email} for $${feeAmount} (Case ${appeal.case_id})`);
+        return {
+            invoice_id: invoice.id,
+            invoice_url: finalizedInvoice.hosted_invoice_url,
+            amount: feeAmount,
+            email: client.email
+        };
+    } catch (err) {
+        console.error('[AutoInvoice] ❌ Error:', err.message);
+        return null;
+    }
+}
+
 // GET /api/appeals
 router.get('/', async (req, res) => {
     if (!isSupabaseEnabled()) return res.status(503).json({ error: 'Database not configured' });
@@ -141,7 +292,7 @@ router.patch('/:id', async (req, res) => {
             'status', 'filing_date', 'hearing_date', 'outcome',
             'estimated_savings', 'savings_amount', 'our_fee_percent', 'our_fee_amount',
             'notes', 'signature', 'drip_state', 'analysis_report', 'analysis_status',
-            'evidence_packet_path', 'filing_data', 'pin'
+            'evidence_packet_path', 'filing_data', 'pin', 'payment_status'
         ];
         const updates = {};
         for (const key of allowed) {
@@ -170,9 +321,18 @@ router.patch('/:id', async (req, res) => {
             .from('appeals')
             .update(updates)
             .eq(col, req.params.id)
-            .select('*, clients(name, email, phone), properties(address)')
+            .select('*, clients(name, email, phone), properties(address, city, state)')
             .single();
         if (error) throw error;
+
+        // Auto-invoice when appeal is won and savings_amount is present
+        if (updates.status === 'won' && (updates.savings_amount || data.savings_amount)) {
+            const invoiceResult = await autoInvoiceClient(data);
+            if (invoiceResult) {
+                data._invoice = invoiceResult;
+            }
+        }
+
         res.json(data);
     } catch (err) {
         console.error('[Appeals] PATCH error:', err.message);

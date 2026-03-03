@@ -4,6 +4,7 @@
  */
 
 const { fetchPropertyData, getAdapter, detectCounty, normalizePropertyType } = require('./property-data');
+const { runEUAnalysis } = require('./eu-analysis');
 
 /**
  * Property type category mapping for hard filtering.
@@ -122,6 +123,70 @@ async function findComparables(subject, caseData) {
     if (needsManualReview) {
         result.needsManualReview = true;
         result.reviewReason = reviewReason;
+    }
+
+    // ==================== EQUAL & UNIFORM ANALYSIS ====================
+    // Run E&U alongside Market Value analysis — use whichever argument is stronger
+    try {
+        // Convert comps to E&U format (needs sale_price and assessed_value)
+        const euComps = scored
+            .filter(c => c.salePrice && c.salePrice > 0 && c.assessedValue && c.assessedValue > 0)
+            .map(c => ({
+                address: c.address,
+                sale_price: c.salePrice,
+                assessed_value: c.assessedValue,
+                sqft: c.sqft,
+                yearBuilt: c.yearBuilt,
+                propertyType: c.propertyType
+            }));
+
+        if (euComps.length >= 5) {
+            const county = detectCounty(subject.address) || 'bexar';
+            const euResult = runEUAnalysis(
+                subject.address,
+                county,
+                subject.assessedValue,
+                euComps,
+                { marketValue: subject.marketValue || subject.assessedValue, taxRate }
+            );
+
+            result.euAnalysis = euResult;
+
+            // If E&U produces a lower target value, recommend it as primary strategy
+            if (euResult.recommendation === 'EQUAL_AND_UNIFORM' || euResult.recommendation === 'EQUAL_AND_UNIFORM_WEAK') {
+                const euTarget = euResult.euTargetValue;
+                const euReduction = subject.assessedValue - euTarget;
+                const euSavings = Math.max(0, Math.round(euReduction * taxRate));
+
+                if (euTarget < recommendedValue) {
+                    // E&U gets a better result — make it primary
+                    result.recommendedValue = euTarget;
+                    result.reduction = Math.max(0, euReduction);
+                    result.estimatedSavings = euSavings;
+                    result.methodology = `Equal & Uniform (§42.26): Median assessment ratio of ${euResult.medianRatio} applied to market value yields target of $${euTarget.toLocaleString()}. This produces a greater reduction than the Market Value approach ($${recommendedValue.toLocaleString()}).`;
+                    result.primaryStrategy = 'equal_and_uniform';
+                    result.marketValueFallback = {
+                        recommendedValue,
+                        reduction: Math.max(0, reduction),
+                        estimatedSavings
+                    };
+                    console.log(`[CompEngine] E&U wins: $${euTarget.toLocaleString()} vs Market Value $${recommendedValue.toLocaleString()}`);
+                } else {
+                    result.primaryStrategy = 'market_value';
+                    console.log(`[CompEngine] Market Value wins: $${recommendedValue.toLocaleString()} vs E&U $${euTarget.toLocaleString()}`);
+                }
+            } else {
+                result.primaryStrategy = 'market_value';
+            }
+        } else {
+            result.euAnalysis = null;
+            result.primaryStrategy = 'market_value';
+            console.log(`[CompEngine] E&U skipped: only ${euComps.length} comps with sale prices (need 5+)`);
+        }
+    } catch (euErr) {
+        console.log(`[CompEngine] E&U analysis error (non-fatal): ${euErr.message}`);
+        result.euAnalysis = null;
+        result.primaryStrategy = 'market_value';
     }
 
     return result;

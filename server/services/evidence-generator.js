@@ -83,8 +83,9 @@ async function generateEvidencePacket(caseData, propertyData, compResults) {
                     .text('Recommended Protest Value', 80, sumY + 15, { align: 'center', width: 452 });
                 doc.fontSize(24).fillColor(GREEN).font('Helvetica-Bold')
                     .text(`$${compResults.recommendedValue.toLocaleString()}`, 80, sumY + 35, { align: 'center', width: 452 });
+                const strategyLabel = compResults.primaryStrategy === 'equal_and_uniform' ? 'Equal & Uniform (§42.26)' : 'Market Value Approach';
                 doc.fontSize(11).fillColor(TEXT_MUTED).font('Helvetica')
-                    .text(`Estimated Annual Tax Savings: $${compResults.estimatedSavings.toLocaleString()}`, 80, sumY + 58, { align: 'center', width: 452 });
+                    .text(`Estimated Annual Tax Savings: $${compResults.estimatedSavings.toLocaleString()} | Strategy: ${strategyLabel}`, 80, sumY + 58, { align: 'center', width: 452 });
                 doc.y = sumY + 100;
             }
 
@@ -290,6 +291,105 @@ async function generateEvidencePacket(caseData, propertyData, compResults) {
             doc.moveDown(0.3);
             doc.fontSize(10).fillColor(TEXT_DARK).font('Helvetica')
                 .text(buildSummaryArgument(caseData, propertyData, compResults), { width: 492 });
+
+            // ===== PAGE 5: EQUAL & UNIFORM ANALYSIS (if available) =====
+            if (compResults.euAnalysis && compResults.euAnalysis.recommendation !== 'INSUFFICIENT_DATA') {
+                const eu = compResults.euAnalysis;
+                doc.addPage();
+                drawHeader(doc);
+                doc.moveDown(1);
+
+                doc.fontSize(16).fillColor(TEXT_DARK).font('Helvetica-Bold')
+                    .text('Equal & Uniform Analysis (Tax Code §42.26)');
+                doc.moveDown(0.3);
+                doc.fontSize(9).fillColor(TEXT_MUTED).font('Helvetica')
+                    .text('This analysis demonstrates that the subject property is appraised at a higher ratio relative to market value than comparable properties, constituting unequal appraisal.');
+                doc.moveDown(0.5);
+                drawDivider(doc);
+                doc.moveDown(0.5);
+
+                // Strategy badge
+                const isPrimary = compResults.primaryStrategy === 'equal_and_uniform';
+                if (isPrimary) {
+                    const badgeY = doc.y;
+                    doc.rect(60, badgeY, 492, 24).fill(GREEN);
+                    doc.fontSize(11).fillColor('white').font('Helvetica-Bold')
+                        .text('★ PRIMARY STRATEGY — This produces the greatest reduction', 70, badgeY + 6, { width: 472, align: 'center' });
+                    doc.y = badgeY + 32;
+                }
+
+                // Key metrics row
+                doc.moveDown(0.3);
+                const metricsY = doc.y;
+                const mBoxW = 155;
+                
+                // Median Ratio
+                doc.rect(60, metricsY, mBoxW, 50).fill(LIGHT_BG).stroke('#e2e8f0');
+                doc.fontSize(8).fillColor(TEXT_MUTED).font('Helvetica').text('Median Assessment Ratio', 65, metricsY + 6, { width: mBoxW - 10 });
+                doc.fontSize(20).fillColor(PURPLE).font('Helvetica-Bold').text(`${eu.medianRatio}`, 65, metricsY + 22, { width: mBoxW - 10 });
+
+                // E&U Target
+                doc.rect(60 + mBoxW + 10, metricsY, mBoxW, 50).fill(LIGHT_BG).stroke('#e2e8f0');
+                doc.fontSize(8).fillColor(TEXT_MUTED).font('Helvetica').text('E&U Target Value', 65 + mBoxW + 10, metricsY + 6, { width: mBoxW - 10 });
+                doc.fontSize(20).fillColor(GREEN).font('Helvetica-Bold').text(`$${eu.euTargetValue.toLocaleString()}`, 65 + mBoxW + 10, metricsY + 22, { width: mBoxW - 10 });
+
+                // Potential Reduction
+                const euReduction = eu.subjectAssessedValue - eu.euTargetValue;
+                doc.rect(60 + (mBoxW + 10) * 2, metricsY, mBoxW, 50).fill(LIGHT_BG).stroke('#e2e8f0');
+                doc.fontSize(8).fillColor(TEXT_MUTED).font('Helvetica').text('Potential Reduction', 65 + (mBoxW + 10) * 2, metricsY + 6, { width: mBoxW - 10 });
+                doc.fontSize(20).fillColor(euReduction > 0 ? GREEN : '#e17055').font('Helvetica-Bold')
+                    .text(`$${Math.max(0, euReduction).toLocaleString()}`, 65 + (mBoxW + 10) * 2, metricsY + 22, { width: mBoxW - 10 });
+
+                doc.y = metricsY + 60;
+                doc.moveDown(1);
+
+                // Comp ratio table
+                doc.fontSize(12).fillColor(TEXT_DARK).font('Helvetica-Bold').text('Comparable Assessment Ratios');
+                doc.moveDown(0.5);
+
+                const tX = 60;
+                const tColW = [180, 100, 100, 60, 52];
+                const tHeaderY = doc.y;
+
+                doc.rect(tX, tHeaderY - 4, 492, 22).fill(PURPLE);
+                doc.fontSize(8).fillColor('white').font('Helvetica-Bold');
+                doc.text('Address', tX + 8, tHeaderY, { width: tColW[0] });
+                doc.text('Assessed', tX + tColW[0], tHeaderY, { width: tColW[1], align: 'right' });
+                doc.text('Sale Price', tX + tColW[0] + tColW[1], tHeaderY, { width: tColW[2], align: 'right' });
+                doc.text('Ratio', tX + tColW[0] + tColW[1] + tColW[2], tHeaderY, { width: tColW[3], align: 'right' });
+                doc.text('Status', tX + tColW[0] + tColW[1] + tColW[2] + tColW[3], tHeaderY, { width: tColW[4], align: 'right' });
+                doc.y = tHeaderY + 24;
+
+                const euComps = eu.compAnalysis || [];
+                euComps.forEach((comp, i) => {
+                    if (i >= 10) return; // Max 10 rows
+                    const rY = doc.y;
+                    if (i % 2 === 0) doc.rect(tX, rY - 2, 492, 16).fill('#fafafa');
+                    doc.fontSize(8).fillColor(TEXT_DARK).font('Helvetica');
+                    const addr = (comp.address || '').substring(0, 30);
+                    doc.text(addr, tX + 8, rY, { width: tColW[0] });
+                    doc.text(`$${(comp.assessed_value || 0).toLocaleString()}`, tX + tColW[0], rY, { width: tColW[1], align: 'right' });
+                    doc.text(`$${(comp.sale_price || 0).toLocaleString()}`, tX + tColW[0] + tColW[1], rY, { width: tColW[2], align: 'right' });
+                    doc.fillColor(comp.excluded ? '#e17055' : TEXT_DARK).font(comp.excluded ? 'Helvetica' : 'Helvetica-Bold');
+                    doc.text(comp.ratio !== null ? `${comp.ratio}` : 'N/A', tX + tColW[0] + tColW[1] + tColW[2], rY, { width: tColW[3], align: 'right' });
+                    doc.fillColor(comp.excluded ? '#e17055' : GREEN).fontSize(7);
+                    doc.text(comp.excluded ? 'Excl.' : 'Incl.', tX + tColW[0] + tColW[1] + tColW[2] + tColW[3], rY, { width: tColW[4], align: 'right' });
+                    doc.y = rY + 18;
+                });
+
+                // E&U explanation
+                doc.moveDown(1);
+                doc.fontSize(10).fillColor(TEXT_DARK).font('Helvetica-Bold').text('Equal & Uniform Argument');
+                doc.moveDown(0.3);
+                doc.fontSize(9).fillColor(TEXT_DARK).font('Helvetica')
+                    .text(`Under Texas Tax Code §42.26, a property owner may protest that their property is appraised at a value that exceeds the median level of appraisal of comparable properties. ` +
+                        `Our analysis of ${eu.includedCount} comparable properties shows a median assessment-to-sale ratio of ${eu.medianRatio}. ` +
+                        `Applying this ratio to the subject property's market value of $${(eu.marketValue || eu.subjectAssessedValue).toLocaleString()} ` +
+                        `yields a target value of $${eu.euTargetValue.toLocaleString()}, ` +
+                        `which is $${Math.max(0, euReduction).toLocaleString()} less than the current assessed value of $${eu.subjectAssessedValue.toLocaleString()}. ` +
+                        `This demonstrates that the subject property is being appraised at a disproportionately high level compared to similar properties in the area.`,
+                        { width: 492 });
+            }
 
             // Footer
             doc.moveDown(2);

@@ -109,6 +109,40 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('appraisalDetailsGroup').style.display = this.value === 'Yes' ? '' : 'none';
     });
 
+    // ==================== STRIPE ELEMENTS SETUP ====================
+    let stripeInstance = null;
+    let cardElement = null;
+    let stripeCustomerId = null;
+    let setupIntentClientSecret = null;
+
+    try {
+        // Initialize Stripe with publishable key
+        stripeInstance = Stripe('pk_live_51T4o1I9Xv7GOUXbE7HQybLNB69XcQYSdV5L5xulEjwxeGbE0NAKbETO0VPuFFFHCC41at69b32bAFMdJSPKHHI4K000hX7PSGC');
+        const elements = stripeInstance.elements();
+        cardElement = elements.create('card', {
+            style: {
+                base: {
+                    fontSize: '16px',
+                    color: '#1a1a2e',
+                    fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif',
+                    '::placeholder': { color: '#9ca3af' }
+                },
+                invalid: { color: '#ff6b6b' }
+            }
+        });
+        cardElement.mount('#card-element');
+        cardElement.on('change', function(event) {
+            const errEl = document.getElementById('card-errors');
+            errEl.textContent = event.error ? event.error.message : '';
+        });
+        console.log('[Stripe] Card element mounted');
+    } catch (stripeErr) {
+        console.warn('[Stripe] Init failed:', stripeErr.message);
+        // Hide card section if Stripe fails to load
+        const cardSection = document.getElementById('card-section');
+        if (cardSection) cardSection.style.display = 'none';
+    }
+
     const form = document.getElementById('intakeForm');
     const submitBtn = document.getElementById('submitBtn');
     const btnText = submitBtn.querySelector('.btn-text');
@@ -177,6 +211,56 @@ document.addEventListener('DOMContentLoaded', function() {
         if (refCode) formData.ref = refCode;
         
         try {
+            // ==================== STRIPE: Save Card on File ====================
+            if (stripeInstance && cardElement) {
+                try {
+                    // Step 1: Create SetupIntent on the server
+                    const setupRes = await fetch('/api/stripe/setup-intent', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            email: formData.email,
+                            name: formData.ownerName,
+                            phone: formData.phone
+                        })
+                    });
+                    const setupData = await setupRes.json();
+
+                    if (setupData.success && setupData.clientSecret) {
+                        // Step 2: Confirm the SetupIntent with the card details
+                        const { setupIntent, error: stripeError } = await stripeInstance.confirmCardSetup(
+                            setupData.clientSecret,
+                            {
+                                payment_method: {
+                                    card: cardElement,
+                                    billing_details: {
+                                        name: formData.ownerName,
+                                        email: formData.email,
+                                        phone: formData.phone
+                                    }
+                                }
+                            }
+                        );
+
+                        if (stripeError) {
+                            document.getElementById('card-errors').textContent = stripeError.message;
+                            submitBtn.disabled = false;
+                            btnText.style.display = 'inline';
+                            btnLoader.style.display = 'none';
+                            return; // Don't submit form if card fails
+                        }
+
+                        // Step 3: Card saved! Pass IDs to backend
+                        formData.stripeCustomerId = setupData.customerId;
+                        formData.stripePaymentMethodId = setupIntent.payment_method;
+                        console.log('[Stripe] Card saved successfully:', setupIntent.payment_method);
+                    }
+                } catch (stripeErr) {
+                    console.warn('[Stripe] Card setup failed:', stripeErr.message);
+                    // Continue without card — they'll get invoiced later
+                }
+            }
+
             const response = await fetch('/api/intake', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

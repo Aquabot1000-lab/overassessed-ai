@@ -1513,6 +1513,38 @@ app.get('/lp/guadalupe-county', (req, res) => {
 app.get('/lp/hays-county', (req, res) => {
     res.sendFile(path.join(__dirname, '../', 'lp', 'hays-county.html'));
 });
+
+// Missing county routes (fixed 2026-03-03)
+app.get('/collin-county', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'lp', 'collin-county.html'));
+});
+app.get('/denton-county', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'lp', 'denton-county.html'));
+});
+app.get('/fort-bend-county', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'lp', 'fort-bend-county.html'));
+});
+app.get('/williamson-county', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'lp', 'williamson-county.html'));
+});
+app.get('/montgomery-county', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'lp', 'montgomery-county.html'));
+});
+app.get('/el-paso-county', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'lp', 'el-paso-county.html'));
+});
+app.get('/hidalgo-county', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'lp', 'hidalgo-county.html'));
+});
+app.get('/guadalupe-county', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'lp', 'guadalupe-county.html'));
+});
+app.get('/comal-county', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'lp', 'comal-county.html'));
+});
+app.get('/hays-county', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'lp', 'hays-county.html'));
+});
 app.get('/lp/travis-county', (req, res) => {
     res.sendFile(path.join(__dirname, '../', 'lp', 'travis-county.html'));
 });
@@ -1594,19 +1626,19 @@ app.get('/san-antonio', (req, res) => {
 });
 
 app.get('/pre-register', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'pre-register.html'));
+});
 
 app.get('/privacy', (req, res) => {
-    res.sendFile(path.join(__dirname, '../', 'privacy.html'));
+    res.sendFile(path.join(__dirname, '..', 'privacy.html'));
 });
 
 app.get('/terms', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'terms.html'));
+});
 
 app.get('/calculator', (req, res) => {
-    res.sendFile(path.join(__dirname, '../', 'calculator.html'));
-});
-    res.sendFile(path.join(__dirname, '../', 'terms.html'));
-});
-    res.sendFile(path.join(__dirname, '..', 'pre-register.html'));
+    res.sendFile(path.join(__dirname, '..', 'calculator.html'));
 });
 
 app.get('/sitemap.xml', (req, res) => {
