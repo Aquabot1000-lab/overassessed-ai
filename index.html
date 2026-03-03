@@ -24,6 +24,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script src="https://js.stripe.com/v3/"></script>
 </head>
 <body>
     <!-- Header -->
@@ -532,12 +533,20 @@
                             </select>
                         </div>
                     </div>
+                    <!-- Payment Method (Card on File) -->
+                    <div class="form-group" id="card-section" style="margin-top: 24px; padding-top: 24px; border-top: 1px solid rgba(255,255,255,0.15);">
+                        <label style="font-size: 15px; font-weight: 600; margin-bottom: 4px;">Payment Method <span style="font-weight: 400; font-size: 13px; opacity: 0.8;">(You won't be charged unless we save you money)</span></label>
+                        <p style="font-size: 13px; opacity: 0.7; margin: 0 0 12px;">Your card is securely stored and only charged after a successful reduction. No savings = no charge, guaranteed.</p>
+                        <div id="card-element" style="background: white; padding: 14px 16px; border-radius: 8px; border: 2px solid #e2e8f0;"></div>
+                        <div id="card-errors" style="color: #ff6b6b; font-size: 13px; margin-top: 6px;"></div>
+                    </div>
                     <button type="submit" class="submit-btn" id="submitBtn">
                         <span class="btn-text">Get My Free Analysis</span>
                         <span class="btn-loader" style="display: none;">⏳</span>
                     </button>
                     <p class="form-disclaimer">
                         By submitting this form, you agree to be contacted by OverAssessed, LLC. 
+                        Your card will only be charged if we successfully reduce your property taxes. 
                         We respect your privacy and will never share your information.
                     </p>
                 </form>
@@ -661,6 +670,33 @@
                     <h4>Contact</h4>
                     <p>San Antonio, TX</p>
                     <p>Email: info@overassessed.ai</p>
+                </div>
+            </div>
+            <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 24px; margin-top: 24px;">
+                <h4 style="color: #fff; font-size: 14px; margin-bottom: 12px; font-weight: 600;">Texas Counties We Serve</h4>
+                <div style="display: flex; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 16px;">
+                    <a href="/harris-county" style="color: rgba(255,255,255,0.7); text-decoration: none; font-size: 13px;">Harris County</a>
+                    <a href="/dallas-county" style="color: rgba(255,255,255,0.7); text-decoration: none; font-size: 13px;">Dallas County</a>
+                    <a href="/tarrant-county" style="color: rgba(255,255,255,0.7); text-decoration: none; font-size: 13px;">Tarrant County</a>
+                    <a href="/bexar-county" style="color: rgba(255,255,255,0.7); text-decoration: none; font-size: 13px;">Bexar County</a>
+                    <a href="/travis-county" style="color: rgba(255,255,255,0.7); text-decoration: none; font-size: 13px;">Travis County</a>
+                    <a href="/collin-county" style="color: rgba(255,255,255,0.7); text-decoration: none; font-size: 13px;">Collin County</a>
+                    <a href="/denton-county" style="color: rgba(255,255,255,0.7); text-decoration: none; font-size: 13px;">Denton County</a>
+                    <a href="/fort-bend-county" style="color: rgba(255,255,255,0.7); text-decoration: none; font-size: 13px;">Fort Bend County</a>
+                    <a href="/williamson-county" style="color: rgba(255,255,255,0.7); text-decoration: none; font-size: 13px;">Williamson County</a>
+                    <a href="/montgomery-county" style="color: rgba(255,255,255,0.7); text-decoration: none; font-size: 13px;">Montgomery County</a>
+                    <a href="/el-paso-county" style="color: rgba(255,255,255,0.7); text-decoration: none; font-size: 13px;">El Paso County</a>
+                    <a href="/hidalgo-county" style="color: rgba(255,255,255,0.7); text-decoration: none; font-size: 13px;">Hidalgo County</a>
+                    <a href="/guadalupe-county" style="color: rgba(255,255,255,0.7); text-decoration: none; font-size: 13px;">Guadalupe County</a>
+                    <a href="/comal-county" style="color: rgba(255,255,255,0.7); text-decoration: none; font-size: 13px;">Comal County</a>
+                    <a href="/hays-county" style="color: rgba(255,255,255,0.7); text-decoration: none; font-size: 13px;">Hays County</a>
+                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 8px 16px;">
+                    <a href="/calculator" style="color: rgba(255,255,255,0.7); text-decoration: none; font-size: 13px;">Tax Savings Calculator</a>
+                    <a href="/exemptions" style="color: rgba(255,255,255,0.7); text-decoration: none; font-size: 13px;">Homestead Exemptions</a>
+                    <a href="/pre-register" style="color: rgba(255,255,255,0.7); text-decoration: none; font-size: 13px;">Pre-Register for 2026</a>
+                    <a href="/privacy" style="color: rgba(255,255,255,0.7); text-decoration: none; font-size: 13px;">Privacy Policy</a>
+                    <a href="/terms" style="color: rgba(255,255,255,0.7); text-decoration: none; font-size: 13px;">Terms of Service</a>
                 </div>
             </div>
             <div class="footer-bottom">
