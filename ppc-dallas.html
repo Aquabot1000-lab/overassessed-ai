@@ -73,6 +73,9 @@ footer a{color:#6c5ce7;text-decoration:none}
 .form-success h3{color:#00d68f;font-size:1.3rem;margin-bottom:8px}
 .form-success p{color:#8888aa}
 </style>
+<!-- Google Ads Global Site Tag -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=AW-3513438695"></script>
+<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag("js",new Date());gtag("config","AW-3513438695");</script>
 </head>
 <body>
 <section class="hero"><div class="hero-inner">
@@ -138,7 +141,7 @@ footer a{color:#6c5ce7;text-decoration:none}
 
 <script>
 (function(){var p=new URLSearchParams(window.location.search);['utm_source','utm_medium','utm_campaign','utm_term','utm_content'].forEach(function(k){var el=document.getElementById(k);if(el&&p.get(k))el.value=p.get(k)})})();
-document.getElementById('ppcForm').addEventListener('submit',function(e){e.preventDefault();var f=this,d=Object.fromEntries(new FormData(f));fetch('/api/db/clients',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)}).then(function(r){if(r.ok){f.style.display='none';document.getElementById('formSuccess').style.display='block';if(typeof gtag==='function')gtag('event','conversion',{send_to:'AW-XXXXXXX/XXXXXXX'});if(typeof fbq==='function')fbq('track','Lead');if(window.dataLayer)dataLayer.push({event:'ppc_lead',landing_page:d.landing_page})}}).catch(function(){alert('Something went wrong. Please try again.')})});
+document.getElementById('ppcForm').addEventListener('submit',function(e){e.preventDefault();var f=this,d=Object.fromEntries(new FormData(f));fetch('/api/db/clients',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)}).then(function(r){if(r.ok){f.style.display='none';document.getElementById('formSuccess').style.display='block';if(typeof gtag==='function')gtag('event','conversion',{send_to:'AW-3513438695/CONVERSION_LABEL'});if(typeof fbq==='function')fbq('track','Lead');if(window.dataLayer)dataLayer.push({event:'ppc_lead',landing_page:d.landing_page})}}).catch(function(){alert('Something went wrong. Please try again.')})});
 (function(){var s=document.querySelector('.sticky-cta');if(!s)return;var h=document.querySelector('.hero');new IntersectionObserver(function(e){s.style.opacity=e[0].isIntersecting?'0':'1';s.style.pointerEvents=e[0].isIntersecting?'none':'auto'},{threshold:0.3}).observe(h)})();
 </script>
 </body>
