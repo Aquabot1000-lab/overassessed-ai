@@ -34,6 +34,7 @@ const exemptionsRouter = require('./routes/exemptions');
 const referralsRouter = require('./routes/referrals');
 const filingsRouter = require('./routes/filings');
 const stripeRouter = require('./routes/stripe');
+const emailNurtureRouter = require('./routes/email-nurture');
 const { checkAllPendingOutcomes } = require('./services/outcome-monitor');
 
 // Twilio setup
@@ -517,7 +518,8 @@ if (isSupabaseEnabled()) {
     app.use('/api/referrals', referralsRouter);
     // Stripe payment routes (webhook is public, others are authenticated via admin check)
     app.use('/api/stripe', stripeRouter);
-    console.log('✅ Public routes mounted: /api/exemptions, /api/referrals, /api/stripe');
+    app.use('/api/email', emailNurtureRouter);
+    console.log('✅ Public routes mounted: /api/exemptions, /api/referrals, /api/stripe, /api/email');
 }
 
 // ==================== ROUTES ====================

@@ -478,7 +478,8 @@
                 if (res.ok) {
                     const data = await res.json();
                     const el = document.getElementById('prereg-count');
-                    if (data.count > 0) el.textContent = data.count;
+                    if (data.count >= 10) el.textContent = data.count;
+                    else if (data.count > 0) el.textContent = 'Homeowners are signing up now!';
                 }
             } catch(e) {}
         })();
