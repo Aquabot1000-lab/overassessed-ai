@@ -188,4 +188,95 @@ router.get('/sequences', (req, res) => {
   res.json(result);
 });
 
+// ── Email Capture / Subscribe ──
+
+router.post('/subscribe', async (req, res) => {
+  try {
+    const { email, county, name } = req.body;
+    if (!email || !email.includes('@')) {
+      return res.status(400).json({ error: 'Valid email required' });
+    }
+
+    // Try Supabase first
+    let saved = false;
+    try {
+      const { isSupabaseEnabled, supabaseAdmin } = require('../lib/supabase');
+      if (isSupabaseEnabled()) {
+        // Create table if needed (idempotent via upsert)
+        const { error } = await supabaseAdmin
+          .from('email_subscribers')
+          .upsert({ email: email.toLowerCase(), county: county || null, name: name || null, subscribed: true }, { onConflict: 'email' });
+
+        if (error && error.code === '42P01') {
+          // Table doesn't exist yet — fall through to file storage
+          console.log('[Email] email_subscribers table not found, using file fallback');
+        } else if (error) {
+          console.error('[Email] Supabase error:', error);
+        } else {
+          saved = true;
+          console.log(`[Email] Subscriber saved to Supabase: ${email} (${county || 'no county'})`);
+        }
+      }
+    } catch (e) {
+      console.warn('[Email] Supabase unavailable, using file fallback');
+    }
+
+    // File fallback if Supabase is down or not configured
+    if (!saved) {
+      const dataDir = path.join(__dirname, '..', 'data');
+      if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+      const subsFile = path.join(dataDir, 'email-subscribers.json');
+      let subs = [];
+      if (fs.existsSync(subsFile)) {
+        subs = JSON.parse(fs.readFileSync(subsFile, 'utf-8'));
+      }
+      // Check for duplicate
+      if (!subs.find(s => s.email === email.toLowerCase())) {
+        subs.push({
+          email: email.toLowerCase(),
+          county: county || null,
+          name: name || null,
+          subscribedAt: new Date().toISOString()
+        });
+        fs.writeFileSync(subsFile, JSON.stringify(subs, null, 2));
+      }
+      console.log(`[Email] Subscriber saved to file: ${email}`);
+    }
+
+    res.json({ success: true, message: 'Subscribed successfully' });
+  } catch (err) {
+    console.error('[Email] Subscribe error:', err);
+    res.status(500).json({ error: 'Failed to subscribe' });
+  }
+});
+
+router.post('/unsubscribe', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email required' });
+
+    try {
+      const { isSupabaseEnabled, supabaseAdmin } = require('../lib/supabase');
+      if (isSupabaseEnabled()) {
+        await supabaseAdmin
+          .from('email_subscribers')
+          .update({ subscribed: false })
+          .eq('email', email.toLowerCase());
+      }
+    } catch (e) {}
+
+    // Also remove from file
+    const subsFile = path.join(__dirname, '..', 'data', 'email-subscribers.json');
+    if (fs.existsSync(subsFile)) {
+      let subs = JSON.parse(fs.readFileSync(subsFile, 'utf-8'));
+      subs = subs.filter(s => s.email !== email.toLowerCase());
+      fs.writeFileSync(subsFile, JSON.stringify(subs, null, 2));
+    }
+
+    res.json({ success: true, message: 'Unsubscribed' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to unsubscribe' });
+  }
+});
+
 module.exports = router;

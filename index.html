@@ -649,6 +649,71 @@ if(new URLSearchParams(window.location.search).get('gclid')){gtag('event','conve
     });
     </script>
 
+    <!-- Email Capture Bar -->
+    <section id="email-signup" style="background: linear-gradient(135deg, #6c5ce7 0%, #0984e3 100%); padding: 50px 20px; text-align: center;">
+        <div style="max-width: 700px; margin: 0 auto;">
+            <h2 style="color: white; font-size: 28px; font-weight: 800; margin-bottom: 10px;">📬 Get Notified When Tax Notices Drop</h2>
+            <p style="color: rgba(255,255,255,0.85); font-size: 18px; margin-bottom: 25px;">Be first to know when your county sends assessment notices. We'll remind you to protest before the deadline.</p>
+            <form id="email-capture-form" style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
+                <input type="email" id="capture-email" placeholder="Your email" required
+                    style="padding: 14px 20px; border: none; border-radius: 8px; font-size: 16px; width: 250px; outline: none;">
+                <select id="capture-county" style="padding: 14px 20px; border: none; border-radius: 8px; font-size: 16px; background: white; outline: none;">
+                    <option value="">Select County</option>
+                    <option value="bexar">Bexar County (San Antonio)</option>
+                    <option value="harris">Harris County (Houston)</option>
+                    <option value="travis">Travis County (Austin)</option>
+                    <option value="dallas">Dallas County</option>
+                    <option value="tarrant">Tarrant County (Fort Worth)</option>
+                    <option value="collin">Collin County</option>
+                    <option value="denton">Denton County</option>
+                    <option value="williamson">Williamson County</option>
+                    <option value="fort-bend">Fort Bend County</option>
+                    <option value="montgomery">Montgomery County</option>
+                    <option value="hays">Hays County</option>
+                    <option value="comal">Comal County</option>
+                    <option value="guadalupe">Guadalupe County</option>
+                    <option value="hidalgo">Hidalgo County</option>
+                    <option value="el-paso">El Paso County</option>
+                    <option value="ga-other">Georgia</option>
+                    <option value="other">Other</option>
+                </select>
+                <button type="submit" id="capture-btn"
+                    style="padding: 14px 30px; background: #2ecc71; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 700; cursor: pointer; transition: background 0.2s;">
+                    Notify Me →
+                </button>
+            </form>
+            <p id="capture-success" style="display: none; color: #2ecc71; font-size: 16px; margin-top: 15px; font-weight: 600;">✅ You're on the list! We'll email you when notices drop in your county.</p>
+            <p style="color: rgba(255,255,255,0.5); font-size: 13px; margin-top: 15px;">No spam. Unsubscribe anytime. We only email about tax deadlines.</p>
+        </div>
+    </section>
+    <script>
+    document.getElementById('email-capture-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const btn = document.getElementById('capture-btn');
+        const email = document.getElementById('capture-email').value;
+        const county = document.getElementById('capture-county').value;
+        btn.disabled = true; btn.textContent = 'Subscribing...';
+        try {
+            const res = await fetch('/api/email/subscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, county })
+            });
+            if (res.ok) {
+                document.getElementById('email-capture-form').style.display = 'none';
+                document.getElementById('capture-success').style.display = 'block';
+            } else {
+                const data = await res.json();
+                alert(data.error || 'Something went wrong. Please try again.');
+                btn.disabled = false; btn.textContent = 'Notify Me →';
+            }
+        } catch(err) {
+            alert('Sorry, there was an error. Please try again.');
+            btn.disabled = false; btn.textContent = 'Notify Me →';
+        }
+    });
+    </script>
+
     <!-- Footer -->
     <footer class="footer">
         <div class="container">
