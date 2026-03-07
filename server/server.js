@@ -73,6 +73,27 @@ const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
 const uploadNotice = multer({ storage: noticeStorage, limits: { fileSize: 10 * 1024 * 1024 } });
 
 // Middleware
+
+// Redirect www to non-www (fixes Google Search Console 5xx on www.overassessed.ai)
+app.use((req, res, next) => {
+    if (req.hostname && req.hostname.startsWith('www.')) {
+        const newHost = req.hostname.slice(4);
+        return res.redirect(301, `https://${newHost}${req.originalUrl}`);
+    }
+    next();
+});
+
+// Remove trailing slashes EXCEPT for /blog/ (which needs index.html)
+// Fixes "alternate page with proper canonical" in GSC
+app.use((req, res, next) => {
+    if (req.path !== '/' && req.path.endsWith('/') && !req.path.startsWith('/api/') && req.path !== '/blog/') {
+        const query = req.url.slice(req.path.length);
+        const safePath = req.path.slice(0, -1).replace(/\/+/g, '/');
+        return res.redirect(301, safePath + query);
+    }
+    next();
+});
+
 app.use(cors());
 app.use(express.json());
 app.use('/uploads', express.static(uploadsDir));
