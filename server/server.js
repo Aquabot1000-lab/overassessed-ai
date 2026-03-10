@@ -118,8 +118,127 @@ function getSubmissionsFile(state) {
     return state === 'GA' ? GA_SUBMISSIONS_FILE : TX_SUBMISSIONS_FILE;
 }
 
-// Read all submissions from both state files
+// ==================== SUPABASE SUBMISSION HELPERS ====================
+// Maps camelCase JS objects ↔ snake_case DB columns
+function submissionToRow(sub) {
+    return {
+        id: sub.id,
+        case_id: sub.caseId,
+        property_address: sub.propertyAddress,
+        property_type: sub.propertyType,
+        owner_name: sub.ownerName,
+        phone: sub.phone,
+        email: sub.email,
+        assessed_value: sub.assessedValue,
+        state: sub.state,
+        county: sub.county,
+        notification_pref: sub.notificationPref,
+        bedrooms: sub.bedrooms,
+        bathrooms: sub.bathrooms,
+        sqft: sub.sqft,
+        year_built: sub.yearBuilt,
+        renovations: sub.renovations,
+        renovation_desc: sub.renovationDesc,
+        condition_issues: sub.conditionIssues,
+        condition_desc: sub.conditionDesc,
+        recent_appraisal: sub.recentAppraisal,
+        appraised_value: sub.appraisedValue,
+        appraisal_date: sub.appraisalDate,
+        notice_file: sub.noticeFile,
+        notice_of_value: sub.noticeOfValue,
+        source: sub.source,
+        utm_data: sub.utm_data,
+        status: sub.status,
+        notes: sub.notes,
+        savings: sub.savings,
+        estimated_savings: sub.estimatedSavings,
+        analysis_report: sub.analysisReport,
+        analysis_status: sub.analysisStatus,
+        property_data: sub.propertyData,
+        comp_results: sub.compResults,
+        evidence_packet_path: sub.evidencePacketPath,
+        filing_data: sub.filingData,
+        needs_manual_review: sub.needsManualReview,
+        review_reason: sub.reviewReason,
+        signature: sub.signature,
+        pin: sub.pin,
+        drip_state: sub.dripState,
+        referral_code: sub.referralCode,
+        discounted_rate: sub.discountedRate,
+        referral_id: sub.referralId,
+        stripe_customer_id: sub.stripeCustomerId,
+        created_at: sub.createdAt,
+        updated_at: sub.updatedAt
+    };
+}
+
+function rowToSubmission(row) {
+    return {
+        id: row.id,
+        caseId: row.case_id,
+        propertyAddress: row.property_address,
+        propertyType: row.property_type,
+        ownerName: row.owner_name,
+        phone: row.phone,
+        email: row.email,
+        assessedValue: row.assessed_value,
+        state: row.state,
+        county: row.county,
+        notificationPref: row.notification_pref,
+        bedrooms: row.bedrooms,
+        bathrooms: row.bathrooms,
+        sqft: row.sqft,
+        yearBuilt: row.year_built,
+        renovations: row.renovations,
+        renovationDesc: row.renovation_desc,
+        conditionIssues: row.condition_issues,
+        conditionDesc: row.condition_desc,
+        recentAppraisal: row.recent_appraisal,
+        appraisedValue: row.appraised_value,
+        appraisalDate: row.appraisal_date,
+        noticeFile: row.notice_file,
+        noticeOfValue: row.notice_of_value,
+        source: row.source,
+        utm_data: row.utm_data,
+        status: row.status,
+        notes: row.notes || [],
+        savings: row.savings,
+        estimatedSavings: row.estimated_savings,
+        analysisReport: row.analysis_report,
+        analysisStatus: row.analysis_status,
+        propertyData: row.property_data,
+        compResults: row.comp_results,
+        evidencePacketPath: row.evidence_packet_path,
+        filingData: row.filing_data,
+        needsManualReview: row.needs_manual_review,
+        reviewReason: row.review_reason,
+        signature: row.signature,
+        pin: row.pin,
+        dripState: row.drip_state,
+        referralCode: row.referral_code,
+        discountedRate: row.discounted_rate,
+        referralId: row.referral_id,
+        stripeCustomerId: row.stripe_customer_id,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at
+    };
+}
+
+// Read all submissions — Supabase primary, file fallback
 async function readAllSubmissions() {
+    if (isSupabaseEnabled()) {
+        try {
+            const { data, error } = await supabaseAdmin
+                .from('submissions')
+                .select('*')
+                .order('created_at', { ascending: false });
+            if (error) throw error;
+            return (data || []).map(rowToSubmission);
+        } catch (err) {
+            console.error('[Submissions] Supabase read failed, falling back to files:', err.message);
+        }
+    }
+    // Fallback to local JSON
     const [tx, ga] = await Promise.all([
         readJsonFile(TX_SUBMISSIONS_FILE),
         readJsonFile(GA_SUBMISSIONS_FILE)
@@ -127,8 +246,21 @@ async function readAllSubmissions() {
     return [...tx, ...ga];
 }
 
-// Write a submission to its state-specific file
+// Write (upsert) a submission — Supabase primary, file fallback
 async function writeSubmission(submission) {
+    if (isSupabaseEnabled()) {
+        try {
+            const row = submissionToRow(submission);
+            const { error } = await supabaseAdmin
+                .from('submissions')
+                .upsert(row, { onConflict: 'id' });
+            if (error) throw error;
+            return;
+        } catch (err) {
+            console.error('[Submissions] Supabase write failed, falling back to file:', err.message);
+        }
+    }
+    // Fallback to local JSON
     const file = getSubmissionsFile(submission.state || 'TX');
     const submissions = await readJsonFile(file);
     const idx = submissions.findIndex(s => s.id === submission.id);
@@ -140,9 +272,34 @@ async function writeSubmission(submission) {
     await writeJsonFile(file, submissions);
 }
 
-// Update submission in the correct state file
+// Update submission in place — Supabase primary, file fallback
 async function updateSubmissionInPlace(submissionId, updater) {
-    // Try TX first, then GA
+    if (isSupabaseEnabled()) {
+        try {
+            // Fetch from Supabase
+            let query = supabaseAdmin.from('submissions').select('*');
+            const { data: rows, error: fetchErr } = await query
+                .or(`id.eq.${submissionId},case_id.eq.${(submissionId || '').toUpperCase()}`);
+            if (fetchErr) throw fetchErr;
+            if (rows && rows.length > 0) {
+                const row = rows[0];
+                const submissions = [rowToSubmission(row)];
+                updater(submissions, 0);
+                const updated = submissions[0];
+                updated.updatedAt = updated.updatedAt || new Date().toISOString();
+                const { error: upErr } = await supabaseAdmin
+                    .from('submissions')
+                    .update(submissionToRow(updated))
+                    .eq('id', row.id);
+                if (upErr) throw upErr;
+                return updated;
+            }
+            return null;
+        } catch (err) {
+            console.error('[Submissions] Supabase update failed, falling back to files:', err.message);
+        }
+    }
+    // Fallback to local JSON
     for (const file of [TX_SUBMISSIONS_FILE, GA_SUBMISSIONS_FILE]) {
         const submissions = await readJsonFile(file);
         const idx = submissions.findIndex(s => s.id === submissionId || s.caseId === (submissionId || '').toUpperCase());
@@ -157,6 +314,19 @@ async function updateSubmissionInPlace(submissionId, updater) {
 
 // Find a submission across both state files
 async function findSubmission(idOrCaseId) {
+    if (isSupabaseEnabled()) {
+        try {
+            const { data: rows, error } = await supabaseAdmin
+                .from('submissions')
+                .select('*')
+                .or(`id.eq.${idOrCaseId},case_id.eq.${(idOrCaseId || '').toUpperCase()}`);
+            if (error) throw error;
+            if (rows && rows.length > 0) return rowToSubmission(rows[0]);
+            return null;
+        } catch (err) {
+            console.error('[Submissions] Supabase find failed, falling back to files:', err.message);
+        }
+    }
     const all = await readAllSubmissions();
     return all.find(s => s.id === idOrCaseId || s.caseId === (idOrCaseId || '').toUpperCase()) || null;
 }
@@ -220,6 +390,26 @@ async function writeJsonFile(filePath, data) {
 }
 
 async function getNextCaseId() {
+    // Try Supabase first to get max case number (survives Railway restarts)
+    if (isSupabaseEnabled()) {
+        try {
+            const { data, error } = await supabaseAdmin
+                .from('submissions')
+                .select('case_id')
+                .order('created_at', { ascending: false })
+                .limit(1);
+            if (!error && data && data.length > 0) {
+                const match = (data[0].case_id || '').match(/OA-(\d+)/);
+                const lastNum = match ? parseInt(match[1]) : 0;
+                const nextNum = lastNum + 1;
+                return `OA-${String(nextNum).padStart(4, '0')}`;
+            }
+            // No submissions yet in Supabase — check local counter then start at 1
+        } catch (err) {
+            console.error('[CaseId] Supabase counter failed:', err.message);
+        }
+    }
+    // Fallback to local counter file
     let counter;
     try {
         counter = JSON.parse(await fs.readFile(COUNTER_FILE, 'utf8'));
@@ -488,11 +678,25 @@ async function runDripCheck() {
         }
 
         if (changed) {
-            // Write back changed submissions to their respective state files
-            const txSubs = submissions.filter(s => (s.state || 'TX') === 'TX');
-            const gaSubs = submissions.filter(s => s.state === 'GA');
-            if (txSubs.length) await writeJsonFile(TX_SUBMISSIONS_FILE, txSubs);
-            if (gaSubs.length) await writeJsonFile(GA_SUBMISSIONS_FILE, gaSubs);
+            // Write back changed submissions
+            if (isSupabaseEnabled()) {
+                try {
+                    for (const sub of submissions) {
+                        if (sub.dripState) {
+                            await supabaseAdmin.from('submissions')
+                                .update({ drip_state: sub.dripState, updated_at: new Date().toISOString() })
+                                .eq('id', sub.id);
+                        }
+                    }
+                } catch (err) {
+                    console.error('[Drip] Supabase write failed:', err.message);
+                }
+            } else {
+                const txSubs = submissions.filter(s => (s.state || 'TX') === 'TX');
+                const gaSubs = submissions.filter(s => s.state === 'GA');
+                if (txSubs.length) await writeJsonFile(TX_SUBMISSIONS_FILE, txSubs);
+                if (gaSubs.length) await writeJsonFile(GA_SUBMISSIONS_FILE, gaSubs);
+            }
             console.log('[Drip] Updated drip states');
         } else {
             console.log('[Drip] No actions needed');
@@ -970,8 +1174,26 @@ app.post('/api/sign/:id', async (req, res) => {
 
 // ==================== FULL ANALYSIS ENGINE ====================
 
-// Helper: find submission and its state file
+// Helper: find submission and its state file (or Supabase row)
 async function findSubmissionWithFile(idOrCaseId) {
+    if (isSupabaseEnabled()) {
+        try {
+            const { data: rows, error } = await supabaseAdmin
+                .from('submissions')
+                .select('*')
+                .or(`id.eq.${idOrCaseId},case_id.eq.${(idOrCaseId || '').toUpperCase()}`);
+            if (error) throw error;
+            if (rows && rows.length > 0) {
+                const sub = rowToSubmission(rows[0]);
+                // Return a compatible structure: submissions array with index 0
+                // and a special _supabaseId for saving back
+                return { file: '__supabase__', submissions: [sub], idx: 0, _supabaseId: rows[0].id };
+            }
+            return null;
+        } catch (err) {
+            console.error('[Submissions] Supabase findWithFile failed, falling back:', err.message);
+        }
+    }
     for (const file of [TX_SUBMISSIONS_FILE, GA_SUBMISSIONS_FILE]) {
         const submissions = await readJsonFile(file);
         const idx = submissions.findIndex(s => s.id === idOrCaseId || s.caseId === (idOrCaseId || '').toUpperCase());
@@ -991,7 +1213,18 @@ async function runFullAnalysis(caseId) {
 
     // Helper to save progress
     async function saveProgress() {
-        await writeJsonFile(file, submissions);
+        if (file === '__supabase__' && isSupabaseEnabled()) {
+            try {
+                const row = submissionToRow(submissions[idx]);
+                await supabaseAdmin.from('submissions').update(row).eq('id', row.id);
+                return;
+            } catch (err) {
+                console.error('[Analysis] Supabase saveProgress failed:', err.message);
+            }
+        }
+        if (file !== '__supabase__') {
+            await writeJsonFile(file, submissions);
+        }
     }
 
     // Update status
