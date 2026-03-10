@@ -1073,6 +1073,17 @@ app.post('/api/intake', upload.single('noticeFile'), async (req, res) => {
                 sendNotificationEmail(`📊 Analysis Ready — ${caseId} ${ownerName}`,
                     `<p>Auto-analysis complete for <strong>${caseId}</strong> — ${propertyAddress}.</p>
                     <p>Evidence packet is generated and ready for review in the admin dashboard.</p>`);
+                // Notify CLIENT that their analysis is ready (was missing — bug fix 2026-03-10)
+                const updatedSub = await findSubmission(submission.id);
+                if (updatedSub) {
+                    const notifyFns = { sendClientSMS, sendClientEmail, brandedEmailWrapper };
+                    const template = buildStatusEmail(updatedSub, 'Analysis Complete', {});
+                    if (template) {
+                        sendClientEmail(email, `${template.title} — ${caseId}`, brandedEmailWrapper(template.title, template.subtitle, template.body));
+                        sendClientSMS(phone, template.sms);
+                        console.log(`[AutoAnalysis] Client notification sent to ${email} for ${caseId}`);
+                    }
+                }
             } catch (err) {
                 console.error(`[AutoAnalysis] Failed for ${caseId}:`, err.message);
             }
