@@ -101,6 +101,12 @@ app.use('/evidence-packets', express.static(path.join(__dirname, 'evidence-packe
 app.use('/filing-packages', express.static(path.join(__dirname, 'filing-packages')));
 app.use('/generated-forms', express.static(path.join(__dirname, 'generated-forms')));
 app.use('/data/automation-screenshots', express.static(path.join(__dirname, '..', 'data', 'automation-screenshots')));
+app.use('/marketing/social-media/images', express.static(path.join(__dirname, '..', 'marketing', 'social-media', 'images'), { 
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.png')) res.setHeader('Content-Type', 'image/png');
+    if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) res.setHeader('Content-Type', 'image/jpeg');
+  }
+}));
 app.use(express.static(path.join(__dirname, '..')));
 
 // File paths
