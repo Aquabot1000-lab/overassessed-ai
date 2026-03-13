@@ -268,36 +268,360 @@ const bcadAdapter = {
 
 registerAdapter('bexar', bcadAdapter);
 
-// ===== HARRIS COUNTY (HCAD) — STUB =====
+// ===== BIS CONSULTANTS E-SEARCH HELPER =====
+// Shared by FBCAD and TCAD — same platform, different base URLs
+function createBISAdapter({ name, code, baseUrl }) {
+    return {
+        name,
+        code,
+        baseUrl,
+
+        _parseAddress(address) {
+            const cleaned = (address || '').replace(/,.*$/, '').trim();
+            const parts = cleaned.split(/\s+/);
+            let streetNumber = '';
+            let streetName = '';
+            if (parts.length > 1 && /^\d+$/.test(parts[0])) {
+                streetNumber = parts.shift();
+            }
+            // Remove common suffixes for search
+            const suffixes = ['st', 'street', 'dr', 'drive', 'ln', 'lane', 'ct', 'court', 'blvd', 'ave', 'avenue', 'rd', 'road', 'way', 'pl', 'place', 'cir', 'circle', 'pkwy', 'parkway'];
+            if (parts.length > 1 && suffixes.includes(parts[parts.length - 1].toLowerCase())) parts.pop();
+            streetName = parts.join(' ');
+            return { streetNumber, streetName };
+        },
+
+        async searchByAddress(address) {
+            try {
+                const { streetNumber, streetName } = this._parseAddress(address);
+                if (!streetName) return [];
+
+                const currentYear = new Date().getFullYear();
+                let keywords = `StreetName:${streetName} Year:${currentYear}`;
+                if (streetNumber) keywords = `StreetNumber:${streetNumber} ${keywords}`;
+
+                const searchUrl = `${this.baseUrl}/Search/Result?keywords=${encodeURIComponent(keywords)}`;
+                console.log(`[${this.code}] Searching: ${searchUrl}`);
+
+                const res = await axios.get(searchUrl, {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                        'Accept': 'text/html,application/xhtml+xml'
+                    },
+                    timeout: 20000
+                });
+
+                const $ = cheerio.load(res.data);
+                const properties = [];
+
+                // BIS e-search returns a table with columns:
+                // Quick Ref ID, Geo ID, Type, Owner Name, Owner ID, Situs Address, Appraised
+                $('table tbody tr, table.table tr').each((i, row) => {
+                    const cells = $(row).find('td');
+                    if (cells.length < 6) return;
+
+                    const quickRefId = cells.eq(0).text().trim();
+                    const geoId = cells.eq(1).text().trim();
+                    const type = cells.eq(2).text().trim();
+                    const ownerName = cells.eq(3).text().trim();
+                    const situsAddress = cells.eq(5).text().trim();
+                    const appraised = cells.eq(6).text().trim();
+
+                    if (!quickRefId || /quick\s*ref/i.test(quickRefId)) return; // skip header rows
+
+                    const link = cells.eq(0).find('a');
+                    const href = link.attr('href') || '';
+
+                    properties.push({
+                        accountId: quickRefId,
+                        geoId,
+                        address: situsAddress,
+                        ownerName,
+                        propertyType: type,
+                        assessedValue: parseFloat((appraised || '0').replace(/[$,\s]/g, '')) || null,
+                        detailUrl: href ? (href.startsWith('http') ? href : `${this.baseUrl}${href.startsWith('/') ? '' : '/'}${href}`) : `${this.baseUrl}/Property/View/${quickRefId}`
+                    });
+                });
+
+                console.log(`[${this.code}] Found ${properties.length} results`);
+                return properties;
+            } catch (error) {
+                console.error(`[${this.code}] Search failed:`, error.message);
+                return [];
+            }
+        },
+
+        async getPropertyDetails(accountIdOrUrl) {
+            try {
+                let url = accountIdOrUrl;
+                if (!url.startsWith('http')) {
+                    url = `${this.baseUrl}/Property/View/${accountIdOrUrl}`;
+                }
+
+                console.log(`[${this.code}] Fetching details: ${url}`);
+
+                const res = await axios.get(url, {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                        'Accept': 'text/html,application/xhtml+xml'
+                    },
+                    timeout: 20000
+                });
+
+                const $ = cheerio.load(res.data);
+
+                // BIS detail pages use label/value pairs in various formats
+                const getText = (...labels) => {
+                    for (const label of labels) {
+                        // Try table rows with th/td pairs
+                        $('th, td, dt, label, span.label, strong').each(function () {
+                            const el = $(this);
+                            if (el.text().trim().toLowerCase().includes(label.toLowerCase())) {
+                                const next = el.next();
+                                const val = next.text().trim();
+                                if (val && val.toLowerCase() !== label.toLowerCase()) {
+                                    getText._result = val;
+                                    return false; // break .each()
+                                }
+                                // Try parent's next sibling
+                                const parentNext = el.parent().next();
+                                const pVal = parentNext.text().trim();
+                                if (pVal) {
+                                    getText._result = pVal;
+                                    return false;
+                                }
+                            }
+                        });
+                        if (getText._result) {
+                            const r = getText._result;
+                            getText._result = null;
+                            return r;
+                        }
+                    }
+                    return null;
+                };
+                getText._result = null;
+
+                const getNumeric = (...labels) => {
+                    const text = getText(...labels);
+                    if (!text) return null;
+                    const num = parseFloat(text.replace(/[$,\s]/g, ''));
+                    return isNaN(num) ? null : num;
+                };
+
+                const data = {
+                    source: this.code,
+                    fetchedAt: new Date().toISOString(),
+                    accountId: getText('Quick Ref', 'Account', 'Prop ID', 'Property ID') ||
+                               accountIdOrUrl.replace(/.*\//, ''),
+                    ownerName: getText('Owner Name', 'Owner'),
+                    address: getText('Situs Address', 'Address', 'Property Address', 'Situs'),
+                    legalDescription: getText('Legal Description', 'Legal'),
+                    propertyType: normalizePropertyType(getText('Type', 'Property Type', 'State Category', 'Improvement Type')),
+                    neighborhoodCode: getText('Neighborhood', 'Nbhd', 'Map ID'),
+                    sqft: getNumeric('Living Area', 'Square Feet', 'SqFt', 'Total Living Area', 'Heated Area', 'GLA'),
+                    yearBuilt: getNumeric('Year Built', 'Yr Built', 'Year Blt'),
+                    bedrooms: getNumeric('Bedrooms', 'Beds'),
+                    bathrooms: getNumeric('Bathrooms', 'Baths', 'Full Baths'),
+                    lotSize: getNumeric('Lot Size', 'Land Area', 'Acres', 'Land SqFt'),
+                    assessedValue: getNumeric('Appraised Value', 'Total Value', 'Market Value', 'Assessed Value', 'Total Appraised'),
+                    landValue: getNumeric('Land Value', 'Land Appraised', 'Land Market'),
+                    improvementValue: getNumeric('Improvement Value', 'Impr Value', 'Impr Appraised', 'Improvement Market'),
+                    exemptions: getText('Exemptions', 'Exemption'),
+                    valueHistory: this._parseValueHistory($)
+                };
+
+                return data;
+            } catch (error) {
+                console.error(`[${this.code}] Detail fetch failed:`, error.message);
+                return null;
+            }
+        },
+
+        async searchComparables(subject) {
+            // Comps come from comp-engine.js; return empty
+            return [];
+        },
+
+        _parseValueHistory($) {
+            const history = [];
+            $('table').each((_, table) => {
+                const headerText = $(table).find('th, td').first().text().toLowerCase();
+                if (headerText.includes('year') || headerText.includes('history') || headerText.includes('value')) {
+                    $(table).find('tr').each((i, row) => {
+                        if (i === 0) return;
+                        const cells = $(row).find('td');
+                        if (cells.length >= 2) {
+                            const year = parseInt(cells.eq(0).text().trim());
+                            const value = parseFloat(cells.eq(1).text().replace(/[$,]/g, ''));
+                            if (year && value) history.push({ year, value });
+                        }
+                    });
+                }
+            });
+            return history.length ? history : null;
+        }
+    };
+}
+
+// ===== FORT BEND COUNTY (FBCAD) — BIS e-search =====
+registerAdapter('fort bend', createBISAdapter({
+    name: 'Fort Bend Central Appraisal District',
+    code: 'FBCAD',
+    baseUrl: 'https://esearch.fbcad.org'
+}));
+
+// ===== TRAVIS COUNTY (TCAD) — BIS e-search =====
+registerAdapter('travis', createBISAdapter({
+    name: 'Travis Central Appraisal District',
+    code: 'TCAD',
+    baseUrl: 'https://esearch.austincad.org'
+}));
+
+// ===== HARRIS COUNTY (HCAD) =====
 registerAdapter('harris', {
     name: 'Harris County Appraisal District',
     code: 'HCAD',
     baseUrl: 'https://public.hcad.org',
-    async searchByAddress(address) {
-        console.log('[HCAD] Stub — not yet implemented');
-        return [];
-    },
-    async getPropertyDetails(accountId) {
-        console.log('[HCAD] Stub — not yet implemented');
-        return null;
-    },
-    async searchComparables(subject) { return []; }
-});
 
-// ===== TRAVIS COUNTY (TCAD) — STUB =====
-registerAdapter('travis', {
-    name: 'Travis County Appraisal District',
-    code: 'TCAD',
-    baseUrl: 'https://www.traviscad.org/property-search',
+    _parseAddress(address) {
+        const cleaned = (address || '').replace(/,.*$/, '').trim();
+        const parts = cleaned.split(/\s+/);
+        let streetNumber = '';
+        if (parts.length > 1 && /^\d+$/.test(parts[0])) {
+            streetNumber = parts.shift();
+        }
+        const suffixes = ['st', 'street', 'dr', 'drive', 'ln', 'lane', 'ct', 'court', 'blvd', 'ave', 'avenue', 'rd', 'road', 'way', 'pl', 'place', 'cir', 'circle', 'pkwy', 'parkway'];
+        if (parts.length > 1 && suffixes.includes(parts[parts.length - 1].toLowerCase())) parts.pop();
+        return { streetNumber, streetName: parts.join(' ') };
+    },
+
     async searchByAddress(address) {
-        console.log('[TCAD] Stub — not yet implemented');
+        // HCAD's public site is unreliable. Try the public search, fall back gracefully.
+        try {
+            const { streetNumber, streetName } = this._parseAddress(address);
+            if (!streetName) return [];
+
+            // Try HCAD's public property search
+            const searchUrl = `https://public.hcad.org/records/Real.asp?search=addr&stnum=${encodeURIComponent(streetNumber)}&stname=${encodeURIComponent(streetName)}&sttype=&stsfx=`;
+            console.log(`[HCAD] Searching: ${searchUrl}`);
+
+            const res = await axios.get(searchUrl, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Accept': 'text/html,application/xhtml+xml'
+                },
+                timeout: 20000,
+                maxRedirects: 5
+            });
+
+            const $ = cheerio.load(res.data);
+            const properties = [];
+
+            // HCAD returns results in a table
+            $('table tr').each((i, row) => {
+                if (i === 0) return; // skip header
+                const cells = $(row).find('td');
+                if (cells.length < 3) return;
+
+                const link = $(row).find('a');
+                const href = link.attr('href') || '';
+                const accountId = link.text().trim() || cells.eq(0).text().trim();
+                const propAddress = cells.eq(1).text().trim();
+                const ownerName = cells.eq(2).text().trim();
+
+                if (accountId && !/account/i.test(accountId)) {
+                    properties.push({
+                        accountId,
+                        address: propAddress,
+                        ownerName,
+                        detailUrl: href ? (href.startsWith('http') ? href : `https://public.hcad.org/records/${href}`) : null
+                    });
+                }
+            });
+
+            console.log(`[HCAD] Found ${properties.length} results`);
+            return properties;
+        } catch (error) {
+            console.error(`[HCAD] Search failed (site may be down):`, error.message);
+            return [];
+        }
+    },
+
+    async getPropertyDetails(accountIdOrUrl) {
+        try {
+            let url = accountIdOrUrl;
+            if (!url.startsWith('http')) {
+                url = `https://public.hcad.org/records/details.asp?cession=A&theession=${accountIdOrUrl}`;
+            }
+
+            console.log(`[HCAD] Fetching details: ${url}`);
+
+            const res = await axios.get(url, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Accept': 'text/html,application/xhtml+xml'
+                },
+                timeout: 20000,
+                maxRedirects: 5
+            });
+
+            const $ = cheerio.load(res.data);
+
+            const getText = (...labels) => {
+                for (const label of labels) {
+                    const found = $('td, th, span, label, div, font').filter(function () {
+                        return $(this).text().trim().toLowerCase().includes(label.toLowerCase());
+                    });
+                    if (found.length) {
+                        const next = found.first().next();
+                        const text = next.text().trim();
+                        if (text && text.toLowerCase() !== label.toLowerCase()) return text;
+                        const parentNext = found.first().parent().next();
+                        const pText = parentNext.text().trim();
+                        if (pText) return pText;
+                    }
+                }
+                return null;
+            };
+
+            const getNumeric = (...labels) => {
+                const text = getText(...labels);
+                if (!text) return null;
+                const num = parseFloat(text.replace(/[$,\s]/g, ''));
+                return isNaN(num) ? null : num;
+            };
+
+            return {
+                source: 'HCAD',
+                fetchedAt: new Date().toISOString(),
+                accountId: getText('Account', 'Account Number') || accountIdOrUrl.replace(/.*=/, ''),
+                ownerName: getText('Owner Name', 'Owner'),
+                address: getText('Property Address', 'Address', 'Site Address'),
+                legalDescription: getText('Legal Description', 'Legal'),
+                propertyType: normalizePropertyType(getText('State Class', 'Type', 'Property Type', 'Building Type')),
+                neighborhoodCode: getText('Neighborhood', 'Nbhd'),
+                sqft: getNumeric('Building Area', 'Living Area', 'Square Feet', 'Total Area'),
+                yearBuilt: getNumeric('Year Built', 'Yr Built'),
+                bedrooms: getNumeric('Bedrooms', 'Beds'),
+                bathrooms: getNumeric('Bathrooms', 'Baths'),
+                lotSize: getNumeric('Lot Size', 'Land Area', 'Land Size'),
+                assessedValue: getNumeric('Appraised Value', 'Total Value', 'Total Appraised', 'Market Value'),
+                landValue: getNumeric('Land Value', 'Land Appraised'),
+                improvementValue: getNumeric('Improvement Value', 'Impr Value', 'Bldg Value'),
+                exemptions: getText('Exemptions', 'Exemption'),
+                valueHistory: null // HCAD detail pages don't reliably show history
+            };
+        } catch (error) {
+            console.error(`[HCAD] Detail fetch failed (site may be down):`, error.message);
+            return null;
+        }
+    },
+
+    async searchComparables(subject) {
+        // Comps come from comp-engine.js; return empty
         return [];
-    },
-    async getPropertyDetails(accountId) {
-        console.log('[TCAD] Stub — not yet implemented');
-        return null;
-    },
-    async searchComparables(subject) { return []; }
+    }
 });
 
 // ===== MAIN API =====
@@ -308,7 +632,8 @@ registerAdapter('travis', {
 function detectCounty(address) {
     const addr = (address || '').toLowerCase();
     if (addr.includes('houston') || addr.includes('harris')) return 'harris';
-    if (addr.includes('austin') || addr.includes('travis')) return 'travis';
+    if (addr.includes('austin') || addr.includes('travis') || addr.includes('pflugerville') || addr.includes('round rock') || addr.includes('cedar park')) return 'travis';
+    if (addr.includes('fort bend') || addr.includes('richmond') || addr.includes('sugar land') || addr.includes('sugarland') || addr.includes('katy') || addr.includes('missouri city') || addr.includes('rosenberg') || addr.includes('stafford') || addr.includes('fulshear')) return 'fort bend';
     return 'bexar'; // Default for San Antonio area
 }
 

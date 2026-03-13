@@ -5,6 +5,15 @@
 
 const { fetchPropertyData, getAdapter, detectCounty, normalizePropertyType } = require('./property-data');
 const { runEUAnalysis } = require('./eu-analysis');
+const { getTaxRate } = require('./rentcast');
+
+// County-specific tax rates (also available via rentcast.getTaxRate)
+const COUNTY_TAX_RATES = {
+    'bexar': 0.0225,
+    'harris': 0.0230,
+    'travis': 0.0210,
+    'fort bend': 0.0250
+};
 
 /**
  * Property type category mapping for hard filtering.
@@ -105,7 +114,8 @@ async function findComparables(subject, caseData) {
     // Calculate recommended protest value
     const { recommendedValue, methodology } = calculateRecommendedValue(subject, bestComps);
     const reduction = subject.assessedValue - recommendedValue;
-    const taxRate = 0.025; // ~2.5% typical Texas rate
+    const county = detectCounty(subject.address);
+    const taxRate = COUNTY_TAX_RATES[county] || getTaxRate(county) || 0.025;
     const estimatedSavings = Math.max(0, Math.round(reduction * taxRate));
 
     const result = {

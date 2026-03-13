@@ -6,8 +6,22 @@
 
 const axios = require('axios');
 
+const { detectCounty } = require('./property-data');
+
 const RENTCAST_BASE = 'https://api.rentcast.io/v1';
 const ARCGIS_BASE = 'https://maps.bexar.org/arcgis/rest/services/Parcels/MapServer/0/query';
+
+// County-specific tax rates
+const COUNTY_TAX_RATES = {
+    'bexar': 0.0225,
+    'harris': 0.0230,
+    'travis': 0.0210,
+    'fort bend': 0.0250
+};
+
+function getTaxRate(county) {
+    return COUNTY_TAX_RATES[(county || 'bexar').toLowerCase()] || 0.0225;
+}
 
 function getApiKey() {
     const key = process.env.RENTCAST_API_KEY;
@@ -66,7 +80,10 @@ async function getBexarParcel(address) {
 }
 
 // ── Combined Analysis ─────────────────────────────────────
-async function runRentCastAnalysis(address) {
+async function runRentCastAnalysis(address, propertyDataFallback = null) {
+    const county = detectCounty(address);
+    const taxRate = getTaxRate(county);
+
     // Fire all three in parallel
     const [avm, property, parcel] = await Promise.allSettled([
         getAVM(address),
@@ -78,19 +95,50 @@ async function runRentCastAnalysis(address) {
     const propData = property.status === 'fulfilled' ? property.value : null;
     const parcelData = parcel.status === 'fulfilled' ? parcel.value : null;
 
+    // If AVM returned no data, use property data adapter as fallback instead of throwing
     if (!avmData) {
-        throw new Error('RentCast AVM returned no data – check address format');
+        console.log('[RentCast] AVM returned no data — using property data fallback');
+        if (!propertyDataFallback) {
+            // Return a degraded result instead of throwing
+            return {
+                address,
+                rentcast: {
+                    marketValue: null, marketLow: null, marketHigh: null,
+                    confidence: null, comparables: [],
+                    propertyType: (propData && propData.propertyType) || null,
+                    squareFootage: (propData && propData.squareFootage) || null,
+                    yearBuilt: (propData && propData.yearBuilt) || null,
+                    bedrooms: (propData && propData.bedrooms) || null,
+                    bathrooms: (propData && propData.bathrooms) || null
+                },
+                county: parcelData ? {
+                    propId: parcelData.PropID, assessedValue: parcelData.TotVal,
+                    landValue: parcelData.LandVal, improvementValue: parcelData.ImprVal,
+                    yearBuilt: parcelData.YrBlt, gba: parcelData.GBA,
+                    ownerName: parcelData.OwnerName, legalDesc: parcelData.LegalDesc,
+                    propertyType: parcelData.PropertyType
+                } : null,
+                analysis: {
+                    overAssessmentAmount: null, overAssessmentPct: null,
+                    recommendation: 'insufficient_data',
+                    estimatedTaxSavings: 0,
+                    note: 'RentCast AVM returned no data. Analysis based on county records only.'
+                }
+            };
+        }
     }
 
-    const marketValue = avmData.price || avmData.priceRangeLow || 0;
-    const marketLow = avmData.priceRangeLow || marketValue;
-    const marketHigh = avmData.priceRangeHigh || marketValue;
+    const marketValue = avmData ? (avmData.price || avmData.priceRangeLow || 0)
+        : (propertyDataFallback ? propertyDataFallback.assessedValue : 0);
+    const marketLow = avmData ? (avmData.priceRangeLow || marketValue) : marketValue;
+    const marketHigh = avmData ? (avmData.priceRangeHigh || marketValue) : marketValue;
 
-    // County assessed value
-    const assessedValue = parcelData ? (parcelData.TotVal || 0) : null;
+    // County assessed value — try parcel data first, then property data fallback
+    const assessedValue = parcelData ? (parcelData.TotVal || 0)
+        : (propertyDataFallback ? propertyDataFallback.assessedValue : null);
 
     // Over-assessment
-    const overAssessment = assessedValue != null ? assessedValue - marketValue : null;
+    const overAssessment = assessedValue != null && marketValue ? assessedValue - marketValue : null;
     const overPct = assessedValue && marketValue ? ((assessedValue - marketValue) / marketValue * 100) : null;
 
     // Protest recommendation
@@ -101,7 +149,7 @@ async function runRentCastAnalysis(address) {
     }
 
     // Comparables from AVM response
-    const comps = (avmData.comparables || []).map(c => ({
+    const comps = (avmData ? (avmData.comparables || []) : []).map(c => ({
         address: c.formattedAddress || c.address || 'N/A',
         price: c.price || c.lastSalePrice || null,
         sqft: c.squareFootage || null,
@@ -115,19 +163,22 @@ async function runRentCastAnalysis(address) {
         propertyType: c.propertyType || null
     }));
 
+    // Build fallback property info from adapter if RentCast property lookup also failed
+    const fbProp = propertyDataFallback || {};
+
     return {
         address,
         rentcast: {
             marketValue,
             marketLow,
             marketHigh,
-            confidence: avmData.confidence || null,
+            confidence: avmData ? (avmData.confidence || null) : null,
             comparables: comps,
-            propertyType: avmData.propertyType || (propData && propData.propertyType) || null,
-            squareFootage: avmData.squareFootage || (propData && propData.squareFootage) || null,
-            yearBuilt: avmData.yearBuilt || (propData && propData.yearBuilt) || null,
-            bedrooms: avmData.bedrooms || (propData && propData.bedrooms) || null,
-            bathrooms: avmData.bathrooms || (propData && propData.bathrooms) || null
+            propertyType: (avmData && avmData.propertyType) || (propData && propData.propertyType) || fbProp.propertyType || null,
+            squareFootage: (avmData && avmData.squareFootage) || (propData && propData.squareFootage) || fbProp.sqft || null,
+            yearBuilt: (avmData && avmData.yearBuilt) || (propData && propData.yearBuilt) || fbProp.yearBuilt || null,
+            bedrooms: (avmData && avmData.bedrooms) || (propData && propData.bedrooms) || fbProp.bedrooms || null,
+            bathrooms: (avmData && avmData.bathrooms) || (propData && propData.bathrooms) || fbProp.bathrooms || null
         },
         county: parcelData ? {
             propId: parcelData.PropID,
@@ -139,12 +190,24 @@ async function runRentCastAnalysis(address) {
             ownerName: parcelData.OwnerName,
             legalDesc: parcelData.LegalDesc,
             propertyType: parcelData.PropertyType
-        } : null,
+        } : (propertyDataFallback ? {
+            propId: propertyDataFallback.accountId,
+            assessedValue: propertyDataFallback.assessedValue,
+            landValue: propertyDataFallback.landValue,
+            improvementValue: propertyDataFallback.improvementValue,
+            yearBuilt: propertyDataFallback.yearBuilt,
+            gba: propertyDataFallback.sqft,
+            ownerName: propertyDataFallback.ownerName,
+            legalDesc: propertyDataFallback.legalDescription,
+            propertyType: propertyDataFallback.propertyType
+        } : null),
         analysis: {
             overAssessmentAmount: overAssessment,
             overAssessmentPct: overPct != null ? Math.round(overPct * 10) / 10 : null,
             recommendation,
-            estimatedTaxSavings: overAssessment > 0 ? Math.round(overAssessment * 0.0225) : 0 // ~2.25% Bexar tax rate
+            estimatedTaxSavings: overAssessment > 0 ? Math.round(overAssessment * taxRate) : 0,
+            taxRate,
+            county
         }
     };
 }
@@ -166,4 +229,4 @@ async function getComps(address) {
     }));
 }
 
-module.exports = { runRentCastAnalysis, getComps, getAVM, getProperty, getBexarParcel };
+module.exports = { runRentCastAnalysis, getComps, getAVM, getProperty, getBexarParcel, getTaxRate, COUNTY_TAX_RATES };
